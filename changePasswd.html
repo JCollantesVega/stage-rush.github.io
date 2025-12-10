@@ -35,9 +35,9 @@
 
     <script>
         // Initialize Supabase
-        const supabaseUrl = 'https://YOUR_PROJECT_ID.supabase.co';
-        const supabaseAnonKey = 'YOUR_ANON_KEY';
-        const supabase = supabase.createClient(supabaseUrl, supabaseAnonKey);
+        const supabaseUrl = 'https://wierlbqrpmxrgrlajtqq.supabase.co';
+        const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndpZXJsYnFycG14cmdybGFqdHFxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI4MTgyNzYsImV4cCI6MjA3ODM5NDI3Nn0.fYAFSSlSEGIOyBF31l8Tmi2ymKiFF7rDVbRDe_GilVg';
+        const supabase = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
 
         // Get token from URL (Supabase adds it)
         const urlParams = new URLSearchParams(window.location.search);
