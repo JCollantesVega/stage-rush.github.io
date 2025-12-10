@@ -39,99 +39,128 @@
         const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6IndpZXJsYnFycG14cmdybGFqdHFxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI4MTgyNzYsImV4cCI6MjA3ODM5NDI3Nn0.fYAFSSlSEGIOyBF31l8Tmi2ymKiFF7rDVbRDe_GilVg';
         const supabase = window.supabase.createClient(supabaseUrl, supabaseAnonKey);
 
-        // Get token from URL (Supabase adds it)
-        const urlParams = new URLSearchParams(window.location.search);
-        const accessToken = urlParams.get('access_token');
-        const refreshToken = urlParams.get('refresh_token');
-        const type = urlParams.get('type'); // Should be 'recovery'
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        const queryParams = new URLSearchParams(window.location.search);
+        
+        // Try to get token from both hash and query
+        const accessToken = hashParams.get('access_token') || queryParams.get('access_token');
+        const refreshToken = hashParams.get('refresh_token') || queryParams.get('refresh_token');
+        const type = hashParams.get('type') || queryParams.get('type');
 
-        document.addEventListener('DOMContentLoaded', async () => {
-            // Check if we have a valid recovery token
+        async function init() {
+            console.log('URL params:', {
+                accessToken: accessToken ? 'Present' : 'Missing',
+                type: type,
+                hash: window.location.hash,
+                search: window.location.search
+            });
+            
             if (!accessToken || type !== 'recovery') {
-                showError('Enlace inválido o expirado. Solicita un nuevo enlace de restablecimiento.');
+                showMessage('Enlace inválido o expirado. Por favor, solicita un nuevo enlace.', true);
+                hideLoading();
                 return;
             }
-
+            
             try {
-                // Set the session with the recovery token
-                const { data, error } = await supabase.auth.setSession({
+                // IMPORTANT: Set the session FIRST
+                const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
                     access_token: accessToken,
-                    refresh_token: refreshToken
+                    refresh_token: refreshToken || ''
                 });
-
-                if (error) throw error;
                 
-                console.log('User authenticated for password reset:', data.user.email);
+                if (sessionError) {
+                    console.error('Session error:', sessionError);
+                    throw sessionError;
+                }
+                
+                console.log('Session set successfully:', sessionData);
+                
+                // Get current user to verify
+                const { data: userData, error: userError } = await supabase.auth.getUser();
+                
+                if (userError) throw userError;
+                
+                console.log('User verified:', userData.user?.email);
+                
+                // Show the form
+                hideLoading();
+                document.getElementById('formContainer').classList.remove('hidden');
+                
             } catch (error) {
-                showError('Error al verificar el enlace: ' + error.message);
+                console.error('Initialization error:', error);
+                showMessage('Error al procesar el enlace: ' + error.message, true);
+                hideLoading();
             }
-        });
+        }
 
-        // Handle form submission
+        function showMessage(text, isError = true) {
+            const msg = document.getElementById('message');
+            msg.textContent = text;
+            msg.className = isError ? 'error' : 'success';
+            msg.classList.remove('hidden');
+            setTimeout(() => msg.classList.add('hidden'), 5000);
+        }
+
+        function hideLoading() {
+            document.getElementById('loading').classList.add('hidden');
+        }
+
         document.getElementById('passwordForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             
-            const newPassword = document.getElementById('newPassword').value;
-            const confirmPassword = document.getElementById('confirmPassword').value;
+            const password = document.getElementById('newPassword').value;
+            const confirm = document.getElementById('confirmPassword').value;
             
-            // Validate passwords
-            if (newPassword !== confirmPassword) {
-                showError('Las contraseñas no coinciden');
+            if (password !== confirm) {
+                showMessage('Las contraseñas no coinciden', true);
                 return;
             }
             
-            if (newPassword.length < 6) {
-                showError('La contraseña debe tener al menos 6 caracteres');
+            if (password.length < 6) {
+                showMessage('La contraseña debe tener al menos 6 caracteres', true);
                 return;
             }
             
             try {
-                showLoading(true);
+                showMessage('Cambiando contraseña...', false);
+                document.getElementById('submitBtn').disabled = true;
                 
                 // Update password
                 const { data, error } = await supabase.auth.updateUser({
-                    password: newPassword
+                    password: password
                 });
                 
                 if (error) throw error;
                 
-                // Success!
-                showSuccess('¡Contraseña cambiada exitosamente!');
-                document.getElementById('passwordForm').classList.add('hidden');
+                // Show success
+                document.getElementById('formContainer').classList.add('hidden');
+                document.getElementById('successContainer').classList.remove('hidden');
+                document.getElementById('message').classList.add('hidden');
                 
-                // Auto-close after 3 seconds or show link back to app
+                // Redirect or close after delay
                 setTimeout(() => {
-                    // Redirect back to your app or show message
-                    window.location.href = 'yourapp://password-changed';
-                    // Or show a success message
-                    document.getElementById('successMessage').innerHTML += 
-                        '<br><br>Puedes cerrar esta ventana y volver a la aplicación.';
+                    try {
+                        // Try to close window
+                        window.close();
+                    } catch (e) {
+                        // If we can't close, just show success
+                        console.log('Window could not be closed automatically');
+                    }
                 }, 3000);
                 
             } catch (error) {
-                showError('Error al cambiar la contraseña: ' + error.message);
-            } finally {
-                showLoading(false);
+                console.error('Password update error:', error);
+                showMessage('Error al cambiar la contraseña: ' + error.message, true);
+                document.getElementById('submitBtn').disabled = false;
             }
         });
 
-        function showError(message) {
-            const errorEl = document.getElementById('errorMessage');
-            errorEl.textContent = message;
-            errorEl.classList.remove('hidden');
-            setTimeout(() => errorEl.classList.add('hidden'), 5000);
-        }
+        // Add submit button reference
+        document.getElementById('passwordForm').querySelector('button').id = 'submitBtn';
+        
+        // Initialize when page loads
+        window.addEventListener('DOMContentLoaded', init);
 
-        function showSuccess(message) {
-            const successEl = document.getElementById('successMessage');
-            successEl.textContent = message;
-            successEl.classList.remove('hidden');
-        }
-
-        function showLoading(show) {
-            document.getElementById('loading').classList.toggle('hidden', !show);
-            document.getElementById('submitBtn').disabled = show;
-        }
     </script>
 </body>
 </html>
