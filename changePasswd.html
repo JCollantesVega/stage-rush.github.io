@@ -3,18 +3,135 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Document</title>
+    <title>Restablecer Contraseña</title>
+    <!-- Include Supabase JS -->
     <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 400px; margin: 50px auto; padding: 20px; }
+        input, button { width: 100%; padding: 10px; margin: 10px 0; box-sizing: border-box; }
+        .error { color: red; margin: 10px 0; }
+        .success { color: green; margin: 10px 0; }
+        .hidden { display: none; }
+    </style>
 </head>
 <body>
-    <form action="" method="post">
-        <label for="">New Password</label>
-        <input type="password">
-        <br>
-        <label for="">Confirm Password</label>
-        <input type="password">
-        <br>
-        <input type="submit" value="Change password">
-    </form>
+    <div id="resetForm">
+        <h2>Restablecer Contraseña</h2>
+        <div id="errorMessage" class="error hidden"></div>
+        <div id="successMessage" class="success hidden"></div>
+        
+        <form id="passwordForm">
+            <label for="newPassword">Nueva Contraseña:</label>
+            <input type="password" id="newPassword" required minlength="6">
+            
+            <label for="confirmPassword">Confirmar Contraseña:</label>
+            <input type="password" id="confirmPassword" required>
+            
+            <button type="submit" id="submitBtn">Cambiar Contraseña</button>
+        </form>
+        
+        <p id="loading" class="hidden">Procesando...</p>
+    </div>
+
+    <script>
+        // Initialize Supabase
+        const supabaseUrl = 'https://YOUR_PROJECT_ID.supabase.co';
+        const supabaseAnonKey = 'YOUR_ANON_KEY';
+        const supabase = supabase.createClient(supabaseUrl, supabaseAnonKey);
+
+        // Get token from URL (Supabase adds it)
+        const urlParams = new URLSearchParams(window.location.search);
+        const accessToken = urlParams.get('access_token');
+        const refreshToken = urlParams.get('refresh_token');
+        const type = urlParams.get('type'); // Should be 'recovery'
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Check if we have a valid recovery token
+            if (!accessToken || type !== 'recovery') {
+                showError('Enlace inválido o expirado. Solicita un nuevo enlace de restablecimiento.');
+                return;
+            }
+
+            try {
+                // Set the session with the recovery token
+                const { data, error } = await supabase.auth.setSession({
+                    access_token: accessToken,
+                    refresh_token: refreshToken
+                });
+
+                if (error) throw error;
+                
+                console.log('User authenticated for password reset:', data.user.email);
+            } catch (error) {
+                showError('Error al verificar el enlace: ' + error.message);
+            }
+        });
+
+        // Handle form submission
+        document.getElementById('passwordForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const newPassword = document.getElementById('newPassword').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            
+            // Validate passwords
+            if (newPassword !== confirmPassword) {
+                showError('Las contraseñas no coinciden');
+                return;
+            }
+            
+            if (newPassword.length < 6) {
+                showError('La contraseña debe tener al menos 6 caracteres');
+                return;
+            }
+            
+            try {
+                showLoading(true);
+                
+                // Update password
+                const { data, error } = await supabase.auth.updateUser({
+                    password: newPassword
+                });
+                
+                if (error) throw error;
+                
+                // Success!
+                showSuccess('¡Contraseña cambiada exitosamente!');
+                document.getElementById('passwordForm').classList.add('hidden');
+                
+                // Auto-close after 3 seconds or show link back to app
+                setTimeout(() => {
+                    // Redirect back to your app or show message
+                    window.location.href = 'yourapp://password-changed';
+                    // Or show a success message
+                    document.getElementById('successMessage').innerHTML += 
+                        '<br><br>Puedes cerrar esta ventana y volver a la aplicación.';
+                }, 3000);
+                
+            } catch (error) {
+                showError('Error al cambiar la contraseña: ' + error.message);
+            } finally {
+                showLoading(false);
+            }
+        });
+
+        function showError(message) {
+            const errorEl = document.getElementById('errorMessage');
+            errorEl.textContent = message;
+            errorEl.classList.remove('hidden');
+            setTimeout(() => errorEl.classList.add('hidden'), 5000);
+        }
+
+        function showSuccess(message) {
+            const successEl = document.getElementById('successMessage');
+            successEl.textContent = message;
+            successEl.classList.remove('hidden');
+        }
+
+        function showLoading(show) {
+            document.getElementById('loading').classList.toggle('hidden', !show);
+            document.getElementById('submitBtn').disabled = show;
+        }
+    </script>
 </body>
 </html>
